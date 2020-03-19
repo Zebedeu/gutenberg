@@ -2,24 +2,23 @@
  * Node dependencies
  */
 const fs = require( 'fs' );
+const { join } = require( 'path' );
+const { execFileSync } = require( 'child_process' );
+const path = require( 'path' );
 
 /**
  * Internal dependencies
  */
-const config = require( './config' );
-const parser = require( './parser' );
-const generator = require( './generator' );
-const { getPackageManifest, getComponentManifest, getDataManifest } = require( './manifest' );
+const { getRootManifest } = require( './manifest' );
 
-const parsedModules = parser( config.dataNamespaces );
-generator( parsedModules, config.dataDocsOutput );
+const tocFileInput = path.resolve( __dirname, '../toc.json' );
+const manifestOutput = path.resolve( __dirname, '../manifest.json' );
 
-const rootManifest = require( config.rootManifest );
-const packageManifest = getPackageManifest( config.packageFileNames );
-const componentManifest = getComponentManifest( config.componentPaths );
-const dataManifest = getDataManifest( parsedModules );
+// Update data files from code
+execFileSync( 'node', [ join( __dirname, 'update-data.js' ) ] );
 
+// Process TOC file and generate manifest handbook
 fs.writeFileSync(
-	config.manifestOutput,
-	JSON.stringify( rootManifest.concat( packageManifest, componentManifest, dataManifest ), undefined, '\t' )
+	manifestOutput,
+	JSON.stringify( getRootManifest( tocFileInput ), undefined, '\t' )
 );

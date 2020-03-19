@@ -1,13 +1,7 @@
 /**
  * External dependencies
  */
-import {
-	isFunction,
-	isString,
-	map,
-	negate,
-	noop,
-} from 'lodash';
+import { isFunction, isString, map, negate } from 'lodash';
 
 /**
  * WordPress dependencies
@@ -16,11 +10,15 @@ import {
 	Children,
 	Component,
 	cloneElement,
-	Fragment,
 	isEmptyElement,
 } from '@wordpress/element';
 
-class Slot extends Component {
+/**
+ * Internal dependencies
+ */
+import { Consumer } from './context';
+
+class SlotComponent extends Component {
 	constructor() {
 		super( ...arguments );
 
@@ -28,23 +26,19 @@ class Slot extends Component {
 	}
 
 	componentDidMount() {
-		const { registerSlot = noop } = this.context;
+		const { registerSlot } = this.props;
 
 		registerSlot( this.props.name, this );
 	}
 
 	componentWillUnmount() {
-		const { unregisterSlot = noop } = this.context;
+		const { unregisterSlot } = this.props;
 
 		unregisterSlot( this.props.name, this );
 	}
 
 	componentDidUpdate( prevProps ) {
-		const { name } = this.props;
-		const {
-			unregisterSlot = noop,
-			registerSlot = noop,
-		} = this.context;
+		const { name, unregisterSlot, registerSlot } = this.props;
 
 		if ( prevProps.name !== name ) {
 			unregisterSlot( prevProps.name );
@@ -57,16 +51,13 @@ class Slot extends Component {
 	}
 
 	render() {
-		const { children, name, bubblesVirtually = false, fillProps = {} } = this.props;
-		const { getFills = noop } = this.context;
+		const { children, name, fillProps = {}, getFills } = this.props;
 
-		if ( bubblesVirtually ) {
-			return <div ref={ this.bindNode } />;
-		}
-
-		const fills = map( getFills( name ), ( fill ) => {
+		const fills = map( getFills( name, this ), ( fill ) => {
 			const fillKey = fill.occurrence;
-			const fillChildren = isFunction( fill.props.children ) ? fill.props.children( fillProps ) : fill.props.children;
+			const fillChildren = isFunction( fill.children )
+				? fill.children( fillProps )
+				: fill.children;
 
 			return Children.map( fillChildren, ( child, childIndex ) => {
 				if ( ! child || isString( child ) ) {
@@ -83,18 +74,21 @@ class Slot extends Component {
 			negate( isEmptyElement )
 		);
 
-		return (
-			<Fragment>
-				{ isFunction( children ) ? children( fills ) : fills }
-			</Fragment>
-		);
+		return <>{ isFunction( children ) ? children( fills ) : fills }</>;
 	}
 }
 
-Slot.contextTypes = {
-	registerSlot: noop,
-	unregisterSlot: noop,
-	getFills: noop,
-};
+const Slot = ( props ) => (
+	<Consumer>
+		{ ( { registerSlot, unregisterSlot, getFills } ) => (
+			<SlotComponent
+				{ ...props }
+				registerSlot={ registerSlot }
+				unregisterSlot={ unregisterSlot }
+				getFills={ getFills }
+			/>
+		) }
+	</Consumer>
+);
 
 export default Slot;

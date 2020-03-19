@@ -1,6 +1,7 @@
 /**
  * External dependencies
  */
+import classnames from 'classnames';
 import { partial, noop, find } from 'lodash';
 
 /**
@@ -8,15 +9,16 @@ import { partial, noop, find } from 'lodash';
  */
 import { Component } from '@wordpress/element';
 import { withInstanceId } from '@wordpress/compose';
-import deprecated from '@wordpress/deprecated';
 
 /**
  * Internal dependencies
  */
 import { NavigableMenu } from '../navigable-container';
+import Button from '../button';
 
 const TabButton = ( { tabId, onClick, children, selected, ...rest } ) => (
-	<button role="tab"
+	<Button
+		role="tab"
 		tabIndex={ selected ? null : -1 }
 		aria-selected={ selected }
 		id={ tabId }
@@ -24,7 +26,7 @@ const TabButton = ( { tabId, onClick, children, selected, ...rest } ) => (
 		{ ...rest }
 	>
 		{ children }
-	</button>
+	</Button>
 );
 
 class TabPanel extends Component {
@@ -36,7 +38,8 @@ class TabPanel extends Component {
 		this.onNavigate = this.onNavigate.bind( this );
 
 		this.state = {
-			selected: initialTabName || ( tabs.length > 0 ? tabs[ 0 ].name : null ),
+			selected:
+				initialTabName || ( tabs.length > 0 ? tabs[ 0 ].name : null ),
 		};
 	}
 
@@ -65,13 +68,6 @@ class TabPanel extends Component {
 		const selectedTab = find( tabs, { name: selected } );
 		const selectedId = instanceId + '-' + selectedTab.name;
 
-		deprecated( 'Tab Panel child function argument used as string', {
-			alternative: 'Argument is now an object, access the name property directly.',
-			version: '4.2.0',
-			plugin: 'Gutenberg',
-			hint: 'This is a global warning, shown regardless of whether the component is used.',
-		} );
-
 		return (
 			<div className={ className }>
 				<NavigableMenu
@@ -81,9 +77,18 @@ class TabPanel extends Component {
 					className="components-tab-panel__tabs"
 				>
 					{ tabs.map( ( tab ) => (
-						<TabButton className={ `${ tab.className } ${ tab.name === selected ? activeClass : '' }` }
+						<TabButton
+							className={ classnames(
+								'components-tab-panel__tabs-item',
+								tab.className,
+								{
+									[ activeClass ]: tab.name === selected,
+								}
+							) }
 							tabId={ instanceId + '-' + tab.name }
-							aria-controls={ instanceId + '-' + tab.name + '-view' }
+							aria-controls={
+								instanceId + '-' + tab.name + '-view'
+							}
 							selected={ tab.name === selected }
 							key={ tab.name }
 							onClick={ partial( this.handleClick, tab.name ) }
@@ -93,13 +98,14 @@ class TabPanel extends Component {
 					) ) }
 				</NavigableMenu>
 				{ selectedTab && (
-					<div aria-labelledby={ selectedId }
+					<div
+						aria-labelledby={ selectedId }
 						role="tabpanel"
 						id={ selectedId + '-view' }
 						className="components-tab-panel__tab-content"
 						tabIndex="0"
 					>
-						{ this.props.children( Object.assign( new String( selectedTab.name ), selectedTab ) ) }
+						{ this.props.children( selectedTab ) }
 					</div>
 				) }
 			</div>

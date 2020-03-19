@@ -12,68 +12,70 @@ import { View } from 'react-native';
  * WordPress dependencies
  */
 import { __ } from '@wordpress/i18n';
-import { Component } from '@wordpress/element';
-import { RichText } from '@wordpress/editor';
-import { parse, createBlock } from '@wordpress/blocks';
+import {
+	RichText,
+	BlockControls,
+	__experimentalUseColors,
+} from '@wordpress/block-editor';
+import { createBlock } from '@wordpress/blocks';
 
-/**
- * Internal dependencies
- */
-import './editor.scss';
+const HeadingEdit = ( {
+	attributes,
+	mergeBlocks,
+	onFocus,
+	onReplace,
+	setAttributes,
+	style,
+} ) => {
+	const { align, content, level, placeholder } = attributes;
 
-const minHeight = 50;
+	/* eslint-disable @wordpress/no-unused-vars-before-return */
+	const { TextColor } = __experimentalUseColors( [
+		{ name: 'textColor', property: 'color' },
+	] );
+	/* eslint-enable @wordpress/no-unused-vars-before-return */
 
-class HeadingEdit extends Component {
-	render() {
-		const {
-			attributes,
-			setAttributes,
-			insertBlocksAfter,
-		} = this.props;
-
-		const {
-			level,
-			placeholder,
-			content,
-		} = attributes;
-
-		const tagName = 'h' + level;
-
-		return (
-			<View>
-				<HeadingToolbar minLevel={ 2 } maxLevel={ 5 } selectedLevel={ level } onChange={ ( newLevel ) => setAttributes( { level: newLevel } ) } />
+	return (
+		<View onAccessibilityTap={ onFocus }>
+			<BlockControls>
+				<HeadingToolbar
+					minLevel={ 2 }
+					maxLevel={ 7 }
+					selectedLevel={ level }
+					onChange={ ( newLevel ) =>
+						setAttributes( { level: newLevel } )
+					}
+					isCollapsed={ false }
+				/>
+			</BlockControls>
+			<TextColor>
 				<RichText
-					tagName={ tagName }
+					identifier="content"
+					tagName={ 'h' + level }
 					value={ content }
-					style={ {
-						minHeight: Math.max( minHeight, typeof attributes.aztecHeight === 'undefined' ? 0 : attributes.aztecHeight ),
-					} }
-					onChange={ ( event ) => {
-						// Create a React Tree from the new HTML
-						const newParaBlock = parse( `<!-- wp:heading {"level":${ level }} --><${ tagName }>${ event.content }</${ tagName }><!-- /wp:heading -->` )[ 0 ];
-						setAttributes( {
-							...this.props.attributes,
-							content: newParaBlock.attributes.content,
+					style={ style }
+					onChange={ ( value ) =>
+						setAttributes( { content: value } )
+					}
+					onMerge={ mergeBlocks }
+					onSplit={ ( value ) => {
+						if ( ! value ) {
+							return createBlock( 'core/paragraph' );
+						}
+
+						return createBlock( 'core/heading', {
+							...attributes,
+							content: value,
 						} );
 					} }
-					onSplit={
-						insertBlocksAfter ?
-							( before, after, ...blocks ) => {
-								setAttributes( { content: before } );
-								insertBlocksAfter( [
-									...blocks,
-									createBlock( 'core/paragraph', { content: after } ),
-								] );
-							} :
-							undefined
-					}
-					onContentSizeChange={ ( event ) => {
-						setAttributes( { aztecHeight: event.aztecHeight } );
-					} }
+					onReplace={ onReplace }
+					onRemove={ () => onReplace( [] ) }
 					placeholder={ placeholder || __( 'Write heading…' ) }
+					textAlign={ align }
 				/>
-			</View>
-		);
-	}
-}
+			</TextColor>
+		</View>
+	);
+};
+
 export default HeadingEdit;

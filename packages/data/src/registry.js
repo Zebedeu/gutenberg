@@ -1,52 +1,50 @@
 /**
  * External dependencies
  */
-import { createStore, applyMiddleware } from 'redux';
-import {
-	flowRight,
-	without,
-	mapValues,
-	get,
-} from 'lodash';
+import { omit, without, mapValues } from 'lodash';
+import memize from 'memize';
 
 /**
  * Internal dependencies
  */
-import dataStore from './store';
-import promise from './promise-middleware';
+import createNamespace from './namespace-store';
+import createCoreDataStore from './store';
 
 /**
- * An isolated orchestrator of store registrations.
+ * @typedef {Object} WPDataRegistry An isolated orchestrator of store registrations.
  *
- * @typedef {WPDataRegistry}
- *
- * @property {Function} registerReducer
- * @property {Function} registerSelectors
- * @property {Function} registerResolvers
- * @property {Function} registerActions
- * @property {Function} registerStore
- * @property {Function} subscribe
- * @property {Function} select
- * @property {Function} dispatch
- * @property {Function} use
+ * @property {Function} registerGenericStore Given a namespace key and settings
+ *                                           object, registers a new generic
+ *                                           store.
+ * @property {Function} registerStore        Given a namespace key and settings
+ *                                           object, registers a new namespace
+ *                                           store.
+ * @property {Function} subscribe            Given a function callback, invokes
+ *                                           the callback on any change to state
+ *                                           within any registered store.
+ * @property {Function} select               Given a namespace key, returns an
+ *                                           object of the  store's registered
+ *                                           selectors.
+ * @property {Function} dispatch             Given a namespace key, returns an
+ *                                           object of the store's registered
+ *                                           action dispatchers.
  */
 
 /**
- * An object of registry function overrides.
- *
- * @typedef {WPDataPlugin}
+ * @typedef {Object} WPDataPlugin An object of registry function overrides.
  */
 
 /**
  * Creates a new store registry, given an optional object of initial store
  * configurations.
  *
- * @param {Object} storeConfigs Initial store configurations.
+ * @param {Object}  storeConfigs Initial store configurations.
+ * @param {Object?} parent       Parent registry.
  *
  * @return {WPDataRegistry} Data registry.
  */
-export function createRegistry( storeConfigs = {} ) {
-	const namespaces = {};
+export function createRegistry( storeConfigs = {}, parent = null ) {
+	const stores = {};
 	let listeners = [];
 
 	/**
@@ -54,147 +52,6 @@ export function createRegistry( storeConfigs = {} ) {
 	 */
 	function globalListener() {
 		listeners.forEach( ( listener ) => listener() );
-	}
-
-	/**
-	 * Registers a new sub-reducer to the global state and returns a Redux-like
-	 * store object.
-	 *
-	 * @param {string} reducerKey Reducer key.
-	 * @param {Object} reducer    Reducer function.
-	 *
-	 * @return {Object} Store Object.
-	 */
-	function registerReducer( reducerKey, reducer ) {
-		const enhancers = [
-			applyMiddleware( promise ),
-		];
-		if ( typeof window !== 'undefined' && window.__REDUX_DEVTOOLS_EXTENSION__ ) {
-			enhancers.push( window.__REDUX_DEVTOOLS_EXTENSION__( { name: reducerKey, instanceId: reducerKey } ) );
-		}
-		const store = createStore( reducer, flowRight( enhancers ) );
-		namespaces[ reducerKey ] = { store, reducer };
-
-		// Customize subscribe behavior to call listeners only on effective change,
-		// not on every dispatch.
-		let lastState = store.getState();
-		store.subscribe( () => {
-			const state = store.getState();
-			const hasChanged = state !== lastState;
-			lastState = state;
-
-			if ( hasChanged ) {
-				globalListener();
-			}
-		} );
-
-		return store;
-	}
-
-	/**
-	 * Registers selectors for external usage.
-	 *
-	 * @param {string} reducerKey   Part of the state shape to register the
-	 *                              selectors for.
-	 * @param {Object} newSelectors Selectors to register. Keys will be used as the
-	 *                              public facing API. Selectors will get passed the
-	 *                              state as first argument.
-	 */
-	function registerSelectors( reducerKey, newSelectors ) {
-		const store = namespaces[ reducerKey ].store;
-		const createStateSelector = ( selector ) => ( ...args ) => selector( store.getState(), ...args );
-		namespaces[ reducerKey ].selectors = mapValues( newSelectors, createStateSelector );
-	}
-
-	/**
-	 * Registers resolvers for a given reducer key. Resolvers are side effects
-	 * invoked once per argument set of a given selector call, used in ensuring
-	 * that the data needs for the selector are satisfied.
-	 *
-	 * @param {string} reducerKey   Part of the state shape to register the
-	 *                              resolvers for.
-	 * @param {Object} newResolvers Resolvers to register.
-	 */
-	function registerResolvers( reducerKey, newResolvers ) {
-		namespaces[ reducerKey ].resolvers = mapValues( newResolvers, ( resolver ) => {
-			if ( ! resolver.fulfill ) {
-				resolver = { fulfill: resolver };
-			}
-
-			return resolver;
-		} );
-
-		namespaces[ reducerKey ].selectors = mapValues( namespaces[ reducerKey ].selectors, ( selector, selectorName ) => {
-			const resolver = newResolvers[ selectorName ];
-			if ( ! resolver ) {
-				return selector;
-			}
-
-			return ( ...args ) => {
-				const { hasStartedResolution } = select( 'core/data' );
-				const { startResolution, finishResolution } = dispatch( 'core/data' );
-				async function fulfillSelector() {
-					const state = namespaces[ reducerKey ].store.getState();
-					if ( typeof resolver.isFulfilled === 'function' && resolver.isFulfilled( state, ...args ) ) {
-						return;
-					}
-
-					if ( hasStartedResolution( reducerKey, selectorName, args ) ) {
-						return;
-					}
-
-					startResolution( reducerKey, selectorName, args );
-					await registry.__experimentalFulfill( reducerKey, selectorName, ...args );
-					finishResolution( reducerKey, selectorName, args );
-				}
-
-				fulfillSelector( ...args );
-				return selector( ...args );
-			};
-		} );
-	}
-
-	/**
-	 * Registers actions for external usage.
-	 *
-	 * @param {string} reducerKey   Part of the state shape to register the
-	 *                              selectors for.
-	 * @param {Object} newActions   Actions to register.
-	 */
-	function registerActions( reducerKey, newActions ) {
-		const store = namespaces[ reducerKey ].store;
-		const createBoundAction = ( action ) => ( ...args ) => store.dispatch( action( ...args ) );
-		namespaces[ reducerKey ].actions = mapValues( newActions, createBoundAction );
-	}
-
-	/**
-	 * Convenience for registering reducer with actions and selectors.
-	 *
-	 * @param {string} reducerKey Reducer key.
-	 * @param {Object} options    Store description (reducer, actions, selectors, resolvers).
-	 *
-	 * @return {Object} Registered store object.
-	 */
-	function registerStore( reducerKey, options ) {
-		if ( ! options.reducer ) {
-			throw new TypeError( 'Must specify store reducer' );
-		}
-
-		const store = registerReducer( reducerKey, options.reducer );
-
-		if ( options.actions ) {
-			registerActions( reducerKey, options.actions );
-		}
-
-		if ( options.selectors ) {
-			registerSelectors( reducerKey, options.selectors );
-		}
-
-		if ( options.resolvers ) {
-			registerResolvers( reducerKey, options.resolvers );
-		}
-
-		return store;
 	}
 
 	/**
@@ -221,28 +78,68 @@ export function createRegistry( storeConfigs = {} ) {
 	 * @return {*} The selector's returned value.
 	 */
 	function select( reducerKey ) {
-		return get( namespaces, [ reducerKey, 'selectors' ] );
+		const store = stores[ reducerKey ];
+		if ( store ) {
+			return store.getSelectors();
+		}
+
+		return parent && parent.select( reducerKey );
 	}
 
-	/**
-	 * Calls a resolver given  arguments
-	 *
-	 * @param {string} reducerKey   Part of the state shape to register the
-	 *                              selectors for.
-	 * @param {string} selectorName Selector name to fulfill.
-	 * @param {Array} args          Selector Arguments.
-	 */
-	async function fulfill( reducerKey, selectorName, ...args ) {
-		const resolver = get( namespaces, [ reducerKey, 'resolvers', selectorName ] );
-		if ( ! resolver ) {
-			return;
-		}
+	const getResolveSelectors = memize(
+		( selectors ) => {
+			return mapValues(
+				omit( selectors, [
+					'getIsResolving',
+					'hasStartedResolution',
+					'hasFinishedResolution',
+					'isResolving',
+					'getCachedResolvers',
+				] ),
+				( selector, selectorName ) => {
+					return ( ...args ) => {
+						return new Promise( ( resolve ) => {
+							const hasFinished = () =>
+								selectors.hasFinishedResolution(
+									selectorName,
+									args
+								);
+							const getResult = () =>
+								selector.apply( null, args );
 
-		const store = namespaces[ reducerKey ].store;
-		const action = resolver.fulfill( ...args );
-		if ( action ) {
-			await store.dispatch( action );
-		}
+							// trigger the selector (to trigger the resolver)
+							const result = getResult();
+							if ( hasFinished() ) {
+								return resolve( result );
+							}
+
+							const unsubscribe = subscribe( () => {
+								if ( hasFinished() ) {
+									unsubscribe();
+									resolve( getResult() );
+								}
+							} );
+						} );
+					};
+				}
+			);
+		},
+		{ maxSize: 1 }
+	);
+
+	/**
+	 * Given the name of a registered store, returns an object containing the store's
+	 * selectors pre-bound to state so that you only need to supply additional arguments,
+	 * and modified so that they return promises that resolve to their eventual values,
+	 * after any resolvers have ran.
+	 *
+	 * @param {string} reducerKey Part of the state shape to register the
+	 *                            selectors for.
+	 *
+	 * @return {Object} Each key of the object matches the name of a selector.
+	 */
+	function __experimentalResolveSelect( reducerKey ) {
+		return getResolveSelectors( select( reducerKey ) );
 	}
 
 	/**
@@ -254,18 +151,18 @@ export function createRegistry( storeConfigs = {} ) {
 	 * @return {*} The action's returned value.
 	 */
 	function dispatch( reducerKey ) {
-		return get( namespaces, [ reducerKey, 'actions' ] );
+		const store = stores[ reducerKey ];
+		if ( store ) {
+			return store.getActions();
+		}
+
+		return parent && parent.dispatch( reducerKey );
 	}
 
-	/**
-	 * Maps an object of function values to proxy invocation through to the
-	 * current internal representation of the registry, which may be enhanced
-	 * by plugins.
-	 *
-	 * @param {Object<string,Function>} attributes Object of function values.
-	 *
-	 * @return {Object<string,Function>} Object enhanced with plugin proxying.
-	 */
+	//
+	// Deprecated
+	// TODO: Remove this after `use()` is removed.
+	//
 	function withPlugins( attributes ) {
 		return mapValues( attributes, ( attribute, key ) => {
 			if ( typeof attribute !== 'function' ) {
@@ -277,29 +174,59 @@ export function createRegistry( storeConfigs = {} ) {
 		} );
 	}
 
+	/**
+	 * Registers a generic store.
+	 *
+	 * @param {string} key    Store registry key.
+	 * @param {Object} config Configuration (getSelectors, getActions, subscribe).
+	 */
+	function registerGenericStore( key, config ) {
+		if ( typeof config.getSelectors !== 'function' ) {
+			throw new TypeError( 'config.getSelectors must be a function' );
+		}
+		if ( typeof config.getActions !== 'function' ) {
+			throw new TypeError( 'config.getActions must be a function' );
+		}
+		if ( typeof config.subscribe !== 'function' ) {
+			throw new TypeError( 'config.subscribe must be a function' );
+		}
+		stores[ key ] = config;
+		config.subscribe( globalListener );
+	}
+
 	let registry = {
-		namespaces,
-		registerReducer,
-		registerSelectors,
-		registerResolvers,
-		registerActions,
-		registerStore,
+		registerGenericStore,
+		stores,
+		namespaces: stores, // TODO: Deprecate/remove this.
 		subscribe,
 		select,
+		__experimentalResolveSelect,
 		dispatch,
 		use,
-		__experimentalFulfill: fulfill,
 	};
 
 	/**
-	 * Enhances the registry with the prescribed set of overrides. Returns the
-	 * enhanced registry to enable plugin chaining.
+	 * Registers a standard `@wordpress/data` store.
 	 *
-	 * @param {WPDataPlugin} plugin  Plugin by which to enhance.
-	 * @param {?Object}      options Optional options to pass to plugin.
+	 * @param {string} reducerKey Reducer key.
+	 * @param {Object} options    Store description (reducer, actions, selectors, resolvers).
 	 *
-	 * @return {WPDataRegistry} Enhanced registry.
+	 * @return {Object} Registered store object.
 	 */
+	registry.registerStore = ( reducerKey, options ) => {
+		if ( ! options.reducer ) {
+			throw new TypeError( 'Must specify store reducer' );
+		}
+
+		const namespace = createNamespace( reducerKey, options, registry );
+		registerGenericStore( reducerKey, namespace );
+		return namespace.store;
+	};
+
+	//
+	// TODO:
+	// This function will be deprecated as soon as it is no longer internally referenced.
+	//
 	function use( plugin, options ) {
 		registry = {
 			...registry,
@@ -309,10 +236,15 @@ export function createRegistry( storeConfigs = {} ) {
 		return registry;
 	}
 
-	Object.entries( {
-		'core/data': dataStore,
-		...storeConfigs,
-	} ).map( ( [ name, config ] ) => registerStore( name, config ) );
+	registerGenericStore( 'core/data', createCoreDataStore( registry ) );
+
+	Object.entries( storeConfigs ).forEach( ( [ name, config ] ) =>
+		registry.registerStore( name, config )
+	);
+
+	if ( parent ) {
+		parent.subscribe( globalListener );
+	}
 
 	return withPlugins( registry );
 }

@@ -1,7 +1,7 @@
 /**
  * External dependencies
  */
-import { mount } from 'enzyme';
+import ReactTestRenderer from 'react-test-renderer';
 
 /**
  * WordPress dependencies
@@ -15,17 +15,15 @@ import PluginPostStatusInfo from '../';
 
 describe( 'PluginPostStatusInfo', () => {
 	test( 'renders fill properly', () => {
-		const wrapper = mount(
+		const tree = ReactTestRenderer.create(
 			<SlotFillProvider>
-				<PluginPostStatusInfo
-					className="my-plugin-post-status-info"
-				>
+				<PluginPostStatusInfo className="my-plugin-post-status-info">
 					My plugin post status info
 				</PluginPostStatusInfo>
 				<PluginPostStatusInfo.Slot />
 			</SlotFillProvider>
-		);
+		).toJSON();
 
-		expect( wrapper.find( 'Slot' ).children() ).toMatchSnapshot();
+		expect( tree ).toMatchSnapshot();
 	} );
 } );

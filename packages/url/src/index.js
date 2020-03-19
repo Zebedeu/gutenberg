@@ -1,66 +1,21 @@
-/**
- * External dependencies
- */
-import { parse, stringify } from 'qs';
-
-const URL_REGEXP = /^(?:https?:)?\/\/\S+$/i;
-const EMAIL_REGEXP = /^(mailto:)?[a-z0-9._%+-]+@[a-z0-9][a-z0-9.-]*\.[a-z]{2,63}$/i;
-const USABLE_HREF_REGEXP = /^(?:[a-z]+:|#|\?|\.|\/)/i;
-
-/**
- * Determines whether the given string looks like a URL.
- *
- * @param {string} url The string to scrutinise.
- *
- * @return {boolean} Whether or not it looks like a URL.
- */
-export function isURL( url ) {
-	return URL_REGEXP.test( url );
-}
-
-/**
- * Appends arguments to the query string of the url
- *
- * @param  {string} url   URL
- * @param  {Object} args  Query Args
- *
- * @return {string}       Updated URL
- */
-export function addQueryArgs( url, args ) {
-	const queryStringIndex = url.indexOf( '?' );
-	const query = queryStringIndex !== -1 ? parse( url.substr( queryStringIndex + 1 ) ) : {};
-	const baseUrl = queryStringIndex !== -1 ? url.substr( 0, queryStringIndex ) : url;
-
-	return baseUrl + '?' + stringify( { ...query, ...args } );
-}
-
-/**
- * Prepends "http://" to a url, if it looks like something that is meant to be a TLD.
- *
- * @param  {string} url The URL to test
- *
- * @return {string}     The updated URL
- */
-export function prependHTTP( url ) {
-	if ( ! USABLE_HREF_REGEXP.test( url ) && ! EMAIL_REGEXP.test( url ) ) {
-		return 'http://' + url;
-	}
-
-	return url;
-}
-
-/**
- * Safely decodes a URI with `decodeURI`. Returns the URI unmodified if
- * `decodeURI` throws an error.
- *
- * @param {string} uri URI to decode.
- *
- * @return {string} Decoded URI if possible.
- */
-export function safeDecodeURI( uri ) {
-	try {
-		return decodeURI( uri );
-	} catch ( uriError ) {
-		return uri;
-	}
-}
+export { isURL } from './is-url';
+export { isEmail } from './is-email';
+export { getProtocol } from './get-protocol';
+export { isValidProtocol } from './is-valid-protocol';
+export { getAuthority } from './get-authority';
+export { isValidAuthority } from './is-valid-authority';
+export { getPath } from './get-path';
+export { isValidPath } from './is-valid-path';
+export { getQueryString } from './get-query-string';
+export { isValidQueryString } from './is-valid-query-string';
+export { getFragment } from './get-fragment';
+export { isValidFragment } from './is-valid-fragment';
+export { addQueryArgs } from './add-query-args';
+export { getQueryArg } from './get-query-arg';
+export { hasQueryArg } from './has-query-arg';
+export { removeQueryArgs } from './remove-query-args';
+export { prependHTTP } from './prepend-http';
+export { safeDecodeURI } from './safe-decode-uri';
+export { safeDecodeURIComponent } from './safe-decode-uri-component';
+export { filterURLForDisplay } from './filter-url-for-display';
+export { cleanForSlug } from './clean-for-slug';

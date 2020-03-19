@@ -1,15 +1,9 @@
 /**
- * External dependencies
- */
-import { stubFalse } from 'lodash';
-
-/**
  * WordPress dependencies
  */
 import { __ } from '@wordpress/i18n';
 import { Component } from '@wordpress/element';
 import { withSelect } from '@wordpress/data';
-import deprecated from '@wordpress/deprecated';
 
 class UnsavedChangesWarning extends Component {
 	constructor() {
@@ -33,19 +27,12 @@ class UnsavedChangesWarning extends Component {
 	 * @return {?string} Warning prompt message, if unsaved changes exist.
 	 */
 	warnIfUnsavedChanges( event ) {
-		const { isDirty, forceIsDirty = stubFalse } = this.props;
+		const { isEditedPostDirty } = this.props;
 
-		// For deprecation, infer explicitly provided if not assigned to
-		// fallback value.
-		if ( forceIsDirty !== stubFalse ) {
-			deprecated( 'UnsavedChangesWarning forceIsDirty prop', {
-				plugin: 'Gutenberg',
-				version: '4.2',
-			} );
-		}
-
-		if ( isDirty || forceIsDirty() ) {
-			event.returnValue = __( 'You have unsaved changes. If you proceed, they will be lost.' );
+		if ( isEditedPostDirty() ) {
+			event.returnValue = __(
+				'You have unsaved changes. If you proceed, they will be lost.'
+			);
 			return event.returnValue;
 		}
 	}
@@ -56,5 +43,9 @@ class UnsavedChangesWarning extends Component {
 }
 
 export default withSelect( ( select ) => ( {
-	isDirty: select( 'core/editor' ).isEditedPostDirty(),
+	// We need to call the selector directly in the listener to avoid race
+	// conditions with `BrowserURL` where `componentDidUpdate` gets the
+	// new value of `isEditedPostDirty` before this component does,
+	// causing this component to incorrectly think a trashed post is still dirty.
+	isEditedPostDirty: select( 'core/editor' ).isEditedPostDirty,
 } ) )( UnsavedChangesWarning );

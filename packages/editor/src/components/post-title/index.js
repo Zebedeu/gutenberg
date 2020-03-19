@@ -13,7 +13,7 @@ import { Component } from '@wordpress/element';
 import { decodeEntities } from '@wordpress/html-entities';
 import { ENTER } from '@wordpress/keycodes';
 import { withSelect, withDispatch } from '@wordpress/data';
-import { KeyboardShortcuts, withFocusOutside } from '@wordpress/components';
+import { withFocusOutside, VisuallyHidden } from '@wordpress/components';
 import { withInstanceId, compose } from '@wordpress/compose';
 
 /**
@@ -35,7 +35,6 @@ class PostTitle extends Component {
 		this.onSelect = this.onSelect.bind( this );
 		this.onUnselect = this.onUnselect.bind( this );
 		this.onKeyDown = this.onKeyDown.bind( this );
-		this.redirectHistory = this.redirectHistory.bind( this );
 
 		this.state = {
 			isSelected: false,
@@ -67,26 +66,6 @@ class PostTitle extends Component {
 		}
 	}
 
-	/**
-	 * Emulates behavior of an undo or redo on its corresponding key press
-	 * combination. This is a workaround to React's treatment of undo in a
-	 * controlled textarea where characters are updated one at a time.
-	 * Instead, leverage the store's undo handling of title changes.
-	 *
-	 * @see https://github.com/facebook/react/issues/8514
-	 *
-	 * @param {KeyboardEvent} event Key event.
-	 */
-	redirectHistory( event ) {
-		if ( event.shiftKey ) {
-			this.props.onRedo();
-		} else {
-			this.props.onUndo();
-		}
-
-		event.preventDefault();
-	}
-
 	render() {
 		const {
 			hasFixedToolbar,
@@ -98,7 +77,9 @@ class PostTitle extends Component {
 			title,
 		} = this.props;
 		const { isSelected } = this.state;
-		const className = classnames( 'editor-post-title__block', {
+
+		// The wp-block className is important for editor styles.
+		const className = classnames( 'wp-block editor-post-title__block', {
 			'is-selected': isSelected,
 			'is-focus-mode': isFocusMode,
 			'has-fixed-toolbar': hasFixedToolbar,
@@ -109,21 +90,21 @@ class PostTitle extends Component {
 			<PostTypeSupportCheck supportKeys="title">
 				<div className="editor-post-title">
 					<div className={ className }>
-						<KeyboardShortcuts
-							shortcuts={ {
-								'mod+z': this.redirectHistory,
-								'mod+shift+z': this.redirectHistory,
-							} }
-						>
-							<label htmlFor={ `post-title-${ instanceId }` } className="screen-reader-text">
+						<div>
+							<VisuallyHidden
+								as="label"
+								htmlFor={ `post-title-${ instanceId }` }
+							>
 								{ decodedPlaceholder || __( 'Add title' ) }
-							</label>
+							</VisuallyHidden>
 							<Textarea
 								id={ `post-title-${ instanceId }` }
 								className="editor-post-title__input"
 								value={ title }
 								onChange={ this.onChange }
-								placeholder={ decodedPlaceholder || __( 'Add title' ) }
+								placeholder={
+									decodedPlaceholder || __( 'Add title' )
+								}
 								onFocus={ this.onSelect }
 								onKeyDown={ this.onKeyDown }
 								onKeyPress={ this.onUnselect }
@@ -134,11 +115,16 @@ class PostTitle extends Component {
 									right away, without needing to click anything.
 								*/
 								/* eslint-disable jsx-a11y/no-autofocus */
-								autoFocus={ isCleanNewPost }
+								autoFocus={
+									document.body === document.activeElement &&
+									isCleanNewPost
+								}
 								/* eslint-enable jsx-a11y/no-autofocus */
 							/>
-						</KeyboardShortcuts>
-						{ isSelected && isPostTypeViewable && <PostPermalink /> }
+						</div>
+						{ isSelected && isPostTypeViewable && (
+							<PostPermalink />
+						) }
 					</div>
 				</div>
 			</PostTypeSupportCheck>
@@ -147,10 +133,11 @@ class PostTitle extends Component {
 }
 
 const applyWithSelect = withSelect( ( select ) => {
-	const { getEditedPostAttribute, getEditorSettings, isCleanNewPost } = select( 'core/editor' );
+	const { getEditedPostAttribute, isCleanNewPost } = select( 'core/editor' );
+	const { getSettings } = select( 'core/block-editor' );
 	const { getPostType } = select( 'core' );
 	const postType = getPostType( getEditedPostAttribute( 'type' ) );
-	const { titlePlaceholder, focusMode, hasFixedToolbar } = getEditorSettings();
+	const { titlePlaceholder, focusMode, hasFixedToolbar } = getSettings();
 
 	return {
 		isCleanNewPost: isCleanNewPost(),
@@ -163,13 +150,10 @@ const applyWithSelect = withSelect( ( select ) => {
 } );
 
 const applyWithDispatch = withDispatch( ( dispatch ) => {
-	const {
-		insertDefaultBlock,
-		editPost,
-		clearSelectedBlock,
-		undo,
-		redo,
-	} = dispatch( 'core/editor' );
+	const { insertDefaultBlock, clearSelectedBlock } = dispatch(
+		'core/block-editor'
+	);
+	const { editPost } = dispatch( 'core/editor' );
 
 	return {
 		onEnterPress() {
@@ -178,8 +162,6 @@ const applyWithDispatch = withDispatch( ( dispatch ) => {
 		onUpdate( title ) {
 			editPost( { title } );
 		},
-		onUndo: undo,
-		onRedo: redo,
 		clearSelectedBlock,
 	};
 } );

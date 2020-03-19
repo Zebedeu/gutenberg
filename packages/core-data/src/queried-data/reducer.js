@@ -1,17 +1,23 @@
 /**
  * External dependencies
  */
-import { combineReducers } from 'redux';
-import { keyBy, map, flowRight } from 'lodash';
+import { map, flowRight } from 'lodash';
+
+/**
+ * WordPress dependencies
+ */
+import { combineReducers } from '@wordpress/data';
 
 /**
  * Internal dependencies
  */
 import {
+	conservativeMapItem,
 	ifMatchingAction,
 	replaceAction,
 	onSubKey,
 } from '../utils';
+import { DEFAULT_ENTITY_KEY } from '../entities';
 import getQueryParts from './get-query-parts';
 
 /**
@@ -40,14 +46,13 @@ export function getMergedItemIds( itemIds, nextItemIds, page, perPage ) {
 
 	for ( let i = 0; i < size; i++ ) {
 		// Preserve existing item ID except for subset of range of next items.
-		const isInNextItemsRange = (
+		const isInNextItemsRange =
 			i >= nextItemIdsStartIndex &&
-			i < nextItemIdsStartIndex + nextItemIds.length
-		);
+			i < nextItemIdsStartIndex + nextItemIds.length;
 
-		mergedItemIds[ i ] = isInNextItemsRange ?
-			nextItemIds[ i - nextItemIdsStartIndex ] :
-			itemIds[ i ];
+		mergedItemIds[ i ] = isInNextItemsRange
+			? nextItemIds[ i - nextItemIdsStartIndex ]
+			: itemIds[ i ];
 	}
 
 	return mergedItemIds;
@@ -65,9 +70,17 @@ export function getMergedItemIds( itemIds, nextItemIds, page, perPage ) {
 function items( state = {}, action ) {
 	switch ( action.type ) {
 		case 'RECEIVE_ITEMS':
+			const key = action.key || DEFAULT_ENTITY_KEY;
 			return {
 				...state,
-				...keyBy( action.items, action.key || 'id' ),
+				...action.items.reduce( ( accumulator, value ) => {
+					const itemId = value[ key ];
+					accumulator[ itemId ] = conservativeMapItem(
+						state[ itemId ],
+						value
+					);
+					return accumulator;
+				}, {} ),
 			};
 	}
 
@@ -107,7 +120,7 @@ const queries = flowRight( [
 	// reducer tracks only a single query object.
 	onSubKey( 'stableKey' ),
 ] )( ( state = null, action ) => {
-	const { type, page, perPage, key = 'id' } = action;
+	const { type, page, perPage, key = DEFAULT_ENTITY_KEY } = action;
 
 	if ( type !== 'RECEIVE_ITEMS' ) {
 		return state;

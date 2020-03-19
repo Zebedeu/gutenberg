@@ -2,6 +2,8 @@
  * External dependencies
  */
 import { shallow, mount } from 'enzyme';
+import TestUtils from 'react-dom/test-utils';
+import ReactDOM from 'react-dom';
 
 /**
  * Internal dependencies
@@ -13,7 +15,10 @@ describe( 'Tooltip', () => {
 		it( 'should render children (abort) if multiple children passed', () => {
 			// Mount: Enzyme shallow does not support wrapping multiple nodes
 			const wrapper = mount(
-				<Tooltip><div /><div /></Tooltip>
+				<Tooltip>
+					<div />
+					<div />
+				</Tooltip>
 			);
 
 			expect( wrapper.children() ).toHaveLength( 2 );
@@ -49,7 +54,12 @@ describe( 'Tooltip', () => {
 			expect( button.childAt( 1 ).name() ).toBe( 'Popover' );
 			expect( popover.prop( 'focusOnMount' ) ).toBe( false );
 			expect( popover.prop( 'position' ) ).toBe( 'bottom right' );
-			expect( popover.children().first().text() ).toBe( 'Help text' );
+			expect(
+				popover
+					.children()
+					.first()
+					.text()
+			).toBe( 'Help text' );
 		} );
 
 		it( 'should show popover on focus', () => {
@@ -75,13 +85,51 @@ describe( 'Tooltip', () => {
 			expect( popover ).toHaveLength( 1 );
 		} );
 
-		it( 'should show popover on delayed mouseenter', () => {
-			const expectPopoverVisible = ( wrapper, visible ) => expect( wrapper.find( 'Popover' ) ).toHaveLength( visible ? 1 : 0 );
-
-			// Mount: Issues with using `setState` asynchronously with shallow-
-			// rendered components: https://github.com/airbnb/enzyme/issues/450
-			const originalMouseEnter = jest.fn();
+		it( 'should show not popover on focus as result of mousedown', () => {
+			const originalOnMouseDown = jest.fn();
+			const originalOnMouseUp = jest.fn();
 			const wrapper = mount(
+				<Tooltip text="Help text">
+					<button
+						onMouseDown={ originalOnMouseDown }
+						onMouseUp={ originalOnMouseUp }
+					>
+						Hover Me!
+					</button>
+				</Tooltip>
+			);
+
+			const button = wrapper.find( 'button' );
+
+			let event;
+
+			event = { type: 'mousedown' };
+			button.simulate( event.type, event );
+			expect( originalOnMouseDown ).toHaveBeenCalledWith(
+				expect.objectContaining( {
+					type: event.type,
+				} )
+			);
+
+			event = { type: 'focus', currentTarget: {} };
+			button.simulate( event.type, event );
+
+			const popover = wrapper.find( 'Popover' );
+			expect( wrapper.state( 'isOver' ) ).toBe( false );
+			expect( popover ).toHaveLength( 0 );
+
+			event = new window.MouseEvent( 'mouseup' );
+			document.dispatchEvent( event );
+			expect( originalOnMouseUp ).toHaveBeenCalledWith(
+				expect.objectContaining( {
+					type: event.type,
+				} )
+			);
+		} );
+
+		it( 'should show popover on delayed mouseenter', () => {
+			const originalMouseEnter = jest.fn();
+			const wrapper = TestUtils.renderIntoDocument(
 				<Tooltip text="Help text">
 					<button
 						onMouseEnter={ originalMouseEnter }
@@ -92,22 +140,32 @@ describe( 'Tooltip', () => {
 				</Tooltip>
 			);
 
-			wrapper.find( 'button' ).simulate( 'mouseenter', {
-				// Enzyme does not accurately emulate event targets
-				// See: https://github.com/airbnb/enzyme/issues/218
-				currentTarget: wrapper.find( 'button' ).getDOMNode(),
-				target: wrapper.find( 'button > span' ).getDOMNode(),
-			} );
+			const button = TestUtils.findRenderedDOMComponentWithTag(
+				wrapper,
+				'button'
+			);
+			// eslint-disable-next-line react/no-find-dom-node
+			TestUtils.Simulate.mouseEnter( ReactDOM.findDOMNode( button ) );
 
-			expect( originalMouseEnter ).toHaveBeenCalled();
+			expect( originalMouseEnter ).toHaveBeenCalledTimes( 1 );
+			expect( wrapper.state.isOver ).toBe( false );
+			expect(
+				TestUtils.scryRenderedDOMComponentsWithClass(
+					wrapper,
+					'components-popover'
+				)
+			).toHaveLength( 0 );
 
-			expect( wrapper.state( 'isOver' ) ).toBe( false );
-			expectPopoverVisible( wrapper, false );
-			wrapper.instance().delayedSetIsOver.flush();
-			wrapper.update();
+			// Force delayedSetIsOver to be called
+			wrapper.delayedSetIsOver.flush();
 
-			expect( wrapper.state( 'isOver' ) ).toBe( true );
-			expectPopoverVisible( wrapper, true );
+			expect( wrapper.state.isOver ).toBe( true );
+			expect(
+				TestUtils.scryRenderedDOMComponentsWithClass(
+					wrapper,
+					'components-popover'
+				)
+			).toHaveLength( 1 );
 		} );
 
 		it( 'should ignore mouseenter on disabled elements', () => {

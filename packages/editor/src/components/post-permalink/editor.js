@@ -7,19 +7,24 @@ import { __ } from '@wordpress/i18n';
 import { Button } from '@wordpress/components';
 import { compose } from '@wordpress/compose';
 
+/**
+ * Internal dependencies
+ */
+import { cleanForSlug } from '../../utils/url';
+
 class PostPermalinkEditor extends Component {
-	constructor( { permalinkParts } ) {
+	constructor( { permalinkParts, slug } ) {
 		super( ...arguments );
 
 		this.state = {
-			editedPostName: permalinkParts.postName,
+			editedPostName: slug || permalinkParts.postName,
 		};
 
 		this.onSavePermalink = this.onSavePermalink.bind( this );
 	}
 
 	onSavePermalink( event ) {
-		const postName = this.state.editedPostName.replace( /\s+/g, '-' );
+		const postName = cleanForSlug( this.state.editedPostName );
 
 		event.preventDefault();
 
@@ -57,7 +62,11 @@ class PostPermalinkEditor extends Component {
 						className="editor-post-permalink-editor__edit"
 						aria-label={ __( 'Edit post permalink' ) }
 						value={ editedPostName }
-						onChange={ ( event ) => this.setState( { editedPostName: event.target.value } ) }
+						onChange={ ( event ) =>
+							this.setState( {
+								editedPostName: event.target.value,
+							} )
+						}
 						type="text"
 						autoFocus
 					/>
@@ -68,7 +77,7 @@ class PostPermalinkEditor extends Component {
 				</span>
 				<Button
 					className="editor-post-permalink-editor__save"
-					isLarge
+					isSecondary
 					onClick={ this.onSavePermalink }
 				>
 					{ __( 'Save' ) }
@@ -91,4 +100,3 @@ export default compose( [
 		return { editPost };
 	} ),
 ] )( PostPermalinkEditor );
-

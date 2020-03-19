@@ -10,7 +10,6 @@ import {
 	Component,
 	Children,
 	cloneElement,
-	findDOMNode,
 	concatChildren,
 } from '@wordpress/element';
 
@@ -23,7 +22,7 @@ import Shortcut from '../shortcut';
 /**
  * Time over children to wait before showing tooltip
  *
- * @type {Number}
+ * @type {number}
  */
 const TOOLTIP_DELAY = 700;
 
@@ -31,11 +30,26 @@ class Tooltip extends Component {
 	constructor() {
 		super( ...arguments );
 
-		this.bindNode = this.bindNode.bind( this );
 		this.delayedSetIsOver = debounce(
 			( isOver ) => this.setState( { isOver } ),
 			TOOLTIP_DELAY
 		);
+
+		/**
+		 * Prebound `isInMouseDown` handler, created as a constant reference to
+		 * assure ability to remove in component unmount.
+		 *
+		 * @type {Function}
+		 */
+		this.cancelIsMouseDown = this.createSetIsMouseDown( false );
+
+		/**
+		 * Whether a the mouse is currently pressed, used in determining whether
+		 * to handle a focus event as displaying the tooltip immediately.
+		 *
+		 * @type {boolean}
+		 */
+		this.isInMouseDown = false;
 
 		this.state = {
 			isOver: false,
@@ -44,65 +58,8 @@ class Tooltip extends Component {
 
 	componentWillUnmount() {
 		this.delayedSetIsOver.cancel();
-		this.disconnectDisabledAttributeObserver();
-	}
 
-	componentDidUpdate( prevProps, prevState ) {
-		const { isOver } = this.state;
-		if ( isOver !== prevState.isOver ) {
-			if ( isOver ) {
-				this.observeDisabledAttribute();
-			} else {
-				this.disconnectDisabledAttributeObserver();
-			}
-		}
-	}
-
-	/**
-	 * Assigns DOM node of the rendered component as an instance property.
-	 *
-	 * @param {Element} ref Rendered component reference.
-	 */
-	bindNode( ref ) {
-		// Disable reason: Because render clones the child, we don't know what
-		// type of element we have, but if it's a DOM node, we want to observe
-		// the disabled attribute.
-		// eslint-disable-next-line react/no-find-dom-node
-		this.node = findDOMNode( ref );
-	}
-
-	/**
-	 * Disconnects any DOM observer attached to the rendered node.
-	 */
-	disconnectDisabledAttributeObserver() {
-		if ( this.observer ) {
-			this.observer.disconnect();
-		}
-	}
-
-	/**
-	 * Adds a DOM observer to the rendered node, if supported and if the DOM
-	 * node exists, to monitor for application of a disabled attribute.
-	 */
-	observeDisabledAttribute() {
-		if ( ! window.MutationObserver || ! this.node ) {
-			return;
-		}
-
-		this.observer = new window.MutationObserver( ( [ mutation ] ) => {
-			if ( mutation.target.disabled ) {
-				// We can assume here that isOver is true, because mutation
-				// observer is only attached for duration of isOver active
-				this.setState( { isOver: false } );
-			}
-		} );
-
-		// Monitor changes to the disable attribute on the DOM node
-		this.observer.observe( this.node, {
-			subtree: true,
-			attributes: true,
-			attributeFilter: [ 'disabled' ],
-		} );
+		document.removeEventListener( 'mouseup', this.cancelIsMouseDown );
 	}
 
 	emitToChild( eventName, event ) {
@@ -132,6 +89,13 @@ class Tooltip extends Component {
 				return;
 			}
 
+			// A focus event will occur as a result of a mouse click, but it
+			// should be disambiguated between interacting with the button and
+			// using an explicit focus shift as a cue to display the tooltip.
+			if ( 'focus' === event.type && this.isInMouseDown ) {
+				return;
+			}
+
 			// Needed in case unsetting is over while delayed set pending, i.e.
 			// quickly blur/mouseleave before delayedSetIsOver is called
 			this.delayedSetIsOver.cancel();
@@ -149,12 +113,43 @@ class Tooltip extends Component {
 		};
 	}
 
+	/**
+	 * Creates an event callback to handle assignment of the `isInMouseDown`
+	 * instance property in response to a `mousedown` or `mouseup` event.
+	 *
+	 * @param {boolean} isMouseDown Whether handler is to be created for the
+	 *                              `mousedown` event, as opposed to `mouseup`.
+	 *
+	 * @return {Function} Event callback handler.
+	 */
+	createSetIsMouseDown( isMouseDown ) {
+		return ( event ) => {
+			// Preserve original child callback behavior
+			this.emitToChild(
+				isMouseDown ? 'onMouseDown' : 'onMouseUp',
+				event
+			);
+
+			// On mouse down, the next `mouseup` should revert the value of the
+			// instance property and remove its own event handler. The bind is
+			// made on the document since the `mouseup` might not occur within
+			// the bounds of the element.
+			document[
+				isMouseDown ? 'addEventListener' : 'removeEventListener'
+			]( 'mouseup', this.cancelIsMouseDown );
+
+			this.isInMouseDown = isMouseDown;
+		};
+	}
+
 	render() {
 		const { children, position, text, shortcut } = this.props;
 		if ( Children.count( children ) !== 1 ) {
 			if ( 'development' === process.env.NODE_ENV ) {
 				// eslint-disable-next-line no-console
-				console.error( 'Tooltip should be called with only a single child element.' );
+				console.error(
+					'Tooltip should be called with only a single child element.'
+				);
 			}
 
 			return children;
@@ -163,12 +158,12 @@ class Tooltip extends Component {
 		const child = Children.only( children );
 		const { isOver } = this.state;
 		return cloneElement( child, {
-			ref: this.bindNode,
 			onMouseEnter: this.createToggleIsOver( 'onMouseEnter', true ),
 			onMouseLeave: this.createToggleIsOver( 'onMouseLeave' ),
 			onClick: this.createToggleIsOver( 'onClick' ),
 			onFocus: this.createToggleIsOver( 'onFocus' ),
 			onBlur: this.createToggleIsOver( 'onBlur' ),
+			onMouseDown: this.createSetIsMouseDown( true ),
 			children: concatChildren(
 				child.props.children,
 				isOver && (
@@ -177,11 +172,16 @@ class Tooltip extends Component {
 						position={ position }
 						className="components-tooltip"
 						aria-hidden="true"
+						animate={ false }
+						noArrow={ true }
 					>
 						{ text }
-						<Shortcut className="components-tooltip__shortcut" shortcut={ shortcut } />
+						<Shortcut
+							className="components-tooltip__shortcut"
+							shortcut={ shortcut }
+						/>
 					</Popover>
-				),
+				)
 			),
 		} );
 	}

@@ -1,12 +1,8 @@
 /**
- * External Dependencies
- */
-import { forOwn } from 'lodash';
-
-/**
- * WordPress Dependencies
+ * WordPress dependencies
  */
 import { registerStore } from '@wordpress/data';
+import { controls as dataControls } from '@wordpress/data-controls';
 
 /**
  * Internal dependencies
@@ -15,28 +11,30 @@ import reducer from './reducer';
 import applyMiddlewares from './middlewares';
 import * as selectors from './selectors';
 import * as actions from './actions';
-import * as tokens from '../components/rich-text/core-tokens';
-import { validateTokenSettings } from '../components/rich-text/tokens';
+import controls from './controls';
+import { STORE_KEY } from './constants';
 
 /**
- * Module Constants
+ * Post editor data store configuration.
+ *
+ * @see https://github.com/WordPress/gutenberg/blob/master/packages/data/README.md#registerStore
+ *
+ * @type {Object}
  */
-const MODULE_KEY = 'core/editor';
-
-const store = registerStore( MODULE_KEY, {
+export const storeConfig = {
 	reducer,
 	selectors,
 	actions,
+	controls: {
+		...dataControls,
+		...controls,
+	},
+};
+
+const store = registerStore( STORE_KEY, {
+	...storeConfig,
 	persist: [ 'preferences' ],
 } );
 applyMiddlewares( store );
-
-forOwn( tokens, ( { name, settings } ) => {
-	settings = validateTokenSettings( name, settings, store.getState() );
-
-	if ( settings ) {
-		store.dispatch( actions.registerToken( name, settings ) );
-	}
-} );
 
 export default store;

@@ -1,29 +1,41 @@
-// Hide all action buttons except the inserter on mobile.
-.edit-post-header-toolbar > .components-button {
-	display: none;
-
-	@include break-small() {
-		display: inline-flex;
-	}
-}
-
 .edit-post-header-toolbar {
 	display: inline-flex;
 	align-items: center;
+
+	// Hide all action buttons except the inserter on mobile.
+	> .components-button {
+		display: none;
+
+		@include break-small() {
+			display: inline-flex;
+		}
+	}
+
+	// Hide table of contents and block navigation on mobile.
+	.block-editor-block-navigation {
+		display: none;
+
+		@include break-small() {
+			display: flex;
+		}
+	}
 }
 
 // Block toolbar when fixed to the top of the screen.
 .edit-post-header-toolbar__block-toolbar {
 	// Stack toolbar below Editor Bar.
 	position: absolute;
-	top: $header-height;
+	top: $header-height + $border-width;
 	left: 0;
 	right: 0;
 	background: $white;
-	min-height: $block-toolbar-height;
 	border-bottom: $border-width solid $light-gray-500;
 
-	.editor-block-toolbar .components-toolbar {
+	&:empty {
+		display: none;
+	}
+
+	.block-editor-block-toolbar .components-toolbar {
 		border-top: none;
 		border-bottom: none;
 	}
@@ -40,37 +52,26 @@
 	}
 
 	// Move toolbar into top Editor Bar.
-	@include break-large {
-		padding-left: $grid-size;
+	@include break-wide {
+		padding-left: $grid-unit-10;
 		position: static;
 		left: auto;
 		right: auto;
 		background: none;
 		border-bottom: none;
-		min-height: auto;
 
 		.is-sidebar-opened & {
 			right: auto;
 		}
 
-		.editor-block-toolbar {
-			margin: -9px 0;
+		.block-editor-block-toolbar {
+			border-left: $border-width solid $light-gray-500;
 		}
 
-		.editor-block-toolbar .components-toolbar {
-			padding: 9px;
+		.block-editor-block-toolbar .components-toolbar {
+			$top-toolbar-padding: ($header-height - $grid-unit-60) / 2;
+			height: $header-height;
+			padding: $top-toolbar-padding 0;
 		}
-	}
-}
-
-.edit-post-header-toolbar .table-of-contents {
-	display: none;
-
-	.is-sidebar-opened & {
-		right: $sidebar-width + 16px;
-	}
-
-	@include break-small() {
-		display: block;
 	}
 }

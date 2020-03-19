@@ -2,6 +2,7 @@
  * External dependencies
  */
 import { isFunction } from 'lodash';
+import classnames from 'classnames';
 
 /**
  * WordPress dependencies
@@ -13,7 +14,7 @@ import { withInstanceId } from '@wordpress/compose';
  * Internal dependencies
  */
 import FormToggle from '../form-toggle';
-import BaseControl from './../base-control';
+import BaseControl from '../base-control';
 
 class ToggleControl extends Component {
 	constructor() {
@@ -29,7 +30,7 @@ class ToggleControl extends Component {
 	}
 
 	render() {
-		const { label, checked, help, instanceId } = this.props;
+		const { label, checked, help, instanceId, className } = this.props;
 		const id = `inspector-toggle-control-${ instanceId }`;
 
 		let describedBy, helpLabel;
@@ -40,10 +41,12 @@ class ToggleControl extends Component {
 
 		return (
 			<BaseControl
-				label={ label }
 				id={ id }
 				help={ helpLabel }
-				className="components-toggle-control"
+				className={ classnames(
+					'components-toggle-control',
+					className
+				) }
 			>
 				<FormToggle
 					id={ id }
@@ -51,6 +54,12 @@ class ToggleControl extends Component {
 					onChange={ this.onChange }
 					aria-describedby={ describedBy }
 				/>
+				<label
+					htmlFor={ id }
+					className="components-toggle-control__label"
+				>
+					{ label }
+				</label>
 			</BaseControl>
 		);
 	}

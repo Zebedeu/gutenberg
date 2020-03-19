@@ -1,7 +1,7 @@
 /**
  * External dependencies
  */
-import { castArray, map, uniqueId } from 'lodash';
+import { compact, map, uniqueId } from 'lodash';
 import { BEGIN, COMMIT, REVERT } from 'redux-optimist';
 
 /**
@@ -13,29 +13,21 @@ import {
 	serialize,
 	createBlock,
 	isReusableBlock,
-	cloneBlock,
 } from '@wordpress/blocks';
 import { __ } from '@wordpress/i18n';
+// TODO: Ideally this would be the only dispatch in scope. This requires either
+// refactoring editor actions to yielded controls, or replacing direct dispatch
+// on the editor store with action creators (e.g. `REMOVE_REUSABLE_BLOCK`).
+import { dispatch as dataDispatch, select } from '@wordpress/data';
 
 /**
  * Internal dependencies
  */
-import { resolveSelector } from './utils';
 import {
-	receiveReusableBlocks as receiveReusableBlocksAction,
-	createSuccessNotice,
-	createErrorNotice,
-	removeBlocks,
-	replaceBlocks,
-	receiveBlocks,
-	saveReusableBlock,
+	__experimentalReceiveReusableBlocks as receiveReusableBlocksAction,
+	__experimentalSaveReusableBlock as saveReusableBlock,
 } from '../actions';
-import {
-	getReusableBlock,
-	getBlock,
-	getBlocks,
-	getBlocksByClientId,
-} from '../selectors';
+import { __experimentalGetReusableBlock as getReusableBlock } from '../selectors';
 
 /**
  * Module Constants
@@ -43,7 +35,7 @@ import {
 const REUSABLE_BLOCK_NOTICE_ID = 'REUSABLE_BLOCK_NOTICE_ID';
 
 /**
- * Fetch Reusable Blocks Effect Handler.
+ * Fetch Reusable blocks Effect Handler.
  *
  * @param {Object} action  action object.
  * @param {Object} store   Redux Store.
@@ -54,36 +46,43 @@ export const fetchReusableBlocks = async ( action, store ) => {
 
 	// TODO: these are potentially undefined, this fix is in place
 	// until there is a filter to not use reusable blocks if undefined
-	const postType = await resolveSelector( 'core', 'getPostType', 'wp_block' );
+	const postType = await apiFetch( { path: '/wp/v2/types/wp_block' } );
 	if ( ! postType ) {
 		return;
 	}
 
-	let result;
-	if ( id ) {
-		result = apiFetch( { path: `/wp/v2/${ postType.rest_base }/${ id }` } );
-	} else {
-		result = apiFetch( { path: `/wp/v2/${ postType.rest_base }?per_page=-1` } );
-	}
-
 	try {
-		const reusableBlockOrBlocks = await result;
-		dispatch( receiveReusableBlocksAction( map(
-			castArray( reusableBlockOrBlocks ),
-			( reusableBlock ) => {
-				const parsedBlocks = parse( reusableBlock.content );
-				if ( parsedBlocks.length === 1 ) {
-					return {
-						reusableBlock,
-						parsedBlock: parsedBlocks[ 0 ],
-					};
+		let posts;
+
+		if ( id ) {
+			posts = [
+				await apiFetch( {
+					path: `/wp/v2/${ postType.rest_base }/${ id }`,
+				} ),
+			];
+		} else {
+			posts = await apiFetch( {
+				path: `/wp/v2/${ postType.rest_base }?per_page=-1`,
+			} );
+		}
+
+		const results = compact(
+			map( posts, ( post ) => {
+				if ( post.status !== 'publish' || post.content.protected ) {
+					return null;
 				}
+
 				return {
-					reusableBlock,
-					parsedBlock: createBlock( 'core/template', {}, parsedBlocks ),
+					...post,
+					content: post.content.raw,
+					title: post.title.raw,
 				};
-			}
-		) ) );
+			} )
+		);
+
+		if ( results.length ) {
+			dispatch( receiveReusableBlocksAction( results ) );
+		}
 
 		dispatch( {
 			type: 'FETCH_REUSABLE_BLOCKS_SUCCESS',
@@ -99,7 +98,7 @@ export const fetchReusableBlocks = async ( action, store ) => {
 };
 
 /**
- * Save Reusable Blocks Effect Handler.
+ * Save Reusable blocks Effect Handler.
  *
  * @param {Object} action  action object.
  * @param {Object} store   Redux Store.
@@ -107,7 +106,7 @@ export const fetchReusableBlocks = async ( action, store ) => {
 export const saveReusableBlocks = async ( action, store ) => {
 	// TODO: these are potentially undefined, this fix is in place
 	// until there is a filter to not use reusable blocks if undefined
-	const postType = await resolveSelector( 'core', 'getPostType', 'wp_block' );
+	const postType = await apiFetch( { path: '/wp/v2/types/wp_block' } );
 	if ( ! postType ) {
 		return;
 	}
@@ -115,12 +114,14 @@ export const saveReusableBlocks = async ( action, store ) => {
 	const { id } = action;
 	const { dispatch } = store;
 	const state = store.getState();
-	const { clientId, title, isTemporary } = getReusableBlock( state, id );
-	const reusableBlock = getBlock( state, clientId );
-	const content = serialize( reusableBlock.name === 'core/template' ? reusableBlock.innerBlocks : reusableBlock );
+	const { title, content, isTemporary } = getReusableBlock( state, id );
 
-	const data = isTemporary ? { title, content } : { id, title, content };
-	const path = isTemporary ? `/wp/v2/${ postType.rest_base }` : `/wp/v2/${ postType.rest_base }/${ id }`;
+	const data = isTemporary
+		? { title, content, status: 'publish' }
+		: { id, title, content, status: 'publish' };
+	const path = isTemporary
+		? `/wp/v2/${ postType.rest_base }`
+		: `/wp/v2/${ postType.rest_base }/${ id }`;
 	const method = isTemporary ? 'POST' : 'PUT';
 
 	try {
@@ -130,19 +131,28 @@ export const saveReusableBlocks = async ( action, store ) => {
 			updatedId: updatedReusableBlock.id,
 			id,
 		} );
-		const message = isTemporary ? __( 'Block created.' ) : __( 'Block updated.' );
-		dispatch( createSuccessNotice( message, { id: REUSABLE_BLOCK_NOTICE_ID } ) );
+		const message = isTemporary
+			? __( 'Block created.' )
+			: __( 'Block updated.' );
+		dataDispatch( 'core/notices' ).createSuccessNotice( message, {
+			id: REUSABLE_BLOCK_NOTICE_ID,
+			type: 'snackbar',
+		} );
+
+		dataDispatch( 'core/block-editor' ).__unstableSaveReusableBlock(
+			id,
+			updatedReusableBlock.id
+		);
 	} catch ( error ) {
 		dispatch( { type: 'SAVE_REUSABLE_BLOCK_FAILURE', id } );
-		dispatch( createErrorNotice( error.message, {
+		dataDispatch( 'core/notices' ).createErrorNotice( error.message, {
 			id: REUSABLE_BLOCK_NOTICE_ID,
-			spokenMessage: error.message,
-		} ) );
+		} );
 	}
 };
 
 /**
- * Delete Reusable Blocks Effect Handler.
+ * Delete Reusable blocks Effect Handler.
  *
  * @param {Object} action  action object.
  * @param {Object} store   Redux Store.
@@ -150,7 +160,7 @@ export const saveReusableBlocks = async ( action, store ) => {
 export const deleteReusableBlocks = async ( action, store ) => {
 	// TODO: these are potentially undefined, this fix is in place
 	// until there is a filter to not use reusable blocks if undefined
-	const postType = await resolveSelector( 'core', 'getPostType', 'wp_block' );
+	const postType = await apiFetch( { path: '/wp/v2/types/wp_block' } );
 	if ( ! postType ) {
 		return;
 	}
@@ -163,11 +173,14 @@ export const deleteReusableBlocks = async ( action, store ) => {
 	if ( ! reusableBlock || reusableBlock.isTemporary ) {
 		return;
 	}
-
 	// Remove any other blocks that reference this reusable block
-	const allBlocks = getBlocks( getState() );
-	const associatedBlocks = allBlocks.filter( ( block ) => isReusableBlock( block ) && block.attributes.ref === id );
-	const associatedBlockClientIds = associatedBlocks.map( ( block ) => block.clientId );
+	const allBlocks = select( 'core/block-editor' ).getBlocks();
+	const associatedBlocks = allBlocks.filter(
+		( block ) => isReusableBlock( block ) && block.attributes.ref === id
+	);
+	const associatedBlockClientIds = associatedBlocks.map(
+		( block ) => block.clientId
+	);
 
 	const transactionId = uniqueId();
 
@@ -178,41 +191,37 @@ export const deleteReusableBlocks = async ( action, store ) => {
 	} );
 
 	// Remove the parsed block.
-	dispatch( removeBlocks( [
-		...associatedBlockClientIds,
-		reusableBlock.clientId,
-	] ) );
+	if ( associatedBlockClientIds.length ) {
+		dataDispatch( 'core/block-editor' ).removeBlocks(
+			associatedBlockClientIds
+		);
+	}
 
 	try {
-		await apiFetch( { path: `/wp/v2/${ postType.rest_base }/${ id }`, method: 'DELETE' } );
+		await apiFetch( {
+			path: `/wp/v2/${ postType.rest_base }/${ id }`,
+			method: 'DELETE',
+		} );
 		dispatch( {
 			type: 'DELETE_REUSABLE_BLOCK_SUCCESS',
 			id,
 			optimist: { type: COMMIT, id: transactionId },
 		} );
 		const message = __( 'Block deleted.' );
-		dispatch( createSuccessNotice( message, { id: REUSABLE_BLOCK_NOTICE_ID } ) );
+		dataDispatch( 'core/notices' ).createSuccessNotice( message, {
+			id: REUSABLE_BLOCK_NOTICE_ID,
+			type: 'snackbar',
+		} );
 	} catch ( error ) {
 		dispatch( {
 			type: 'DELETE_REUSABLE_BLOCK_FAILURE',
 			id,
 			optimist: { type: REVERT, id: transactionId },
 		} );
-		dispatch( createErrorNotice( error.message, {
+		dataDispatch( 'core/notices' ).createErrorNotice( error.message, {
 			id: REUSABLE_BLOCK_NOTICE_ID,
-			spokenMessage: error.message,
-		} ) );
+		} );
 	}
-};
-
-/**
- * Receive Reusable Blocks Effect Handler.
- *
- * @param {Object} action  action object.
- * @return {Object} receive blocks action
- */
-export const receiveReusableBlocks = ( action ) => {
-	return receiveBlocks( map( action.results, 'parsedBlock' ) );
 };
 
 /**
@@ -223,16 +232,13 @@ export const receiveReusableBlocks = ( action ) => {
  */
 export const convertBlockToStatic = ( action, store ) => {
 	const state = store.getState();
-	const oldBlock = getBlock( state, action.clientId );
+	const oldBlock = select( 'core/block-editor' ).getBlock( action.clientId );
 	const reusableBlock = getReusableBlock( state, oldBlock.attributes.ref );
-	const referencedBlock = getBlock( state, reusableBlock.clientId );
-	let newBlocks;
-	if ( referencedBlock.name === 'core/template' ) {
-		newBlocks = referencedBlock.innerBlocks.map( ( innerBlock ) => cloneBlock( innerBlock ) );
-	} else {
-		newBlocks = [ createBlock( referencedBlock.name, referencedBlock.attributes ) ];
-	}
-	store.dispatch( replaceBlocks( oldBlock.clientId, newBlocks ) );
+	const newBlocks = parse( reusableBlock.content );
+	dataDispatch( 'core/block-editor' ).replaceBlocks(
+		oldBlock.clientId,
+		newBlocks
+	);
 };
 
 /**
@@ -242,43 +248,24 @@ export const convertBlockToStatic = ( action, store ) => {
  * @param {Object} store   Redux Store.
  */
 export const convertBlockToReusable = ( action, store ) => {
-	const { getState, dispatch } = store;
-	let parsedBlock;
-	if ( action.clientIds.length === 1 ) {
-		parsedBlock = getBlock( getState(), action.clientIds[ 0 ] );
-	} else {
-		parsedBlock = createBlock(
-			'core/template',
-			{},
-			getBlocksByClientId( getState(), action.clientIds )
-		);
-
-		// This shouldn't be necessary but at the moment
-		// we expect the content of the shared blocks to live in the blocks state.
-		dispatch( receiveBlocks( [ parsedBlock ] ) );
-	}
-
+	const { dispatch } = store;
 	const reusableBlock = {
 		id: uniqueId( 'reusable' ),
-		clientId: parsedBlock.clientId,
 		title: __( 'Untitled Reusable Block' ),
+		content: serialize(
+			select( 'core/block-editor' ).getBlocksByClientId(
+				action.clientIds
+			)
+		),
 	};
 
-	dispatch( receiveReusableBlocksAction( [ {
-		reusableBlock,
-		parsedBlock,
-	} ] ) );
-
+	dispatch( receiveReusableBlocksAction( [ reusableBlock ] ) );
 	dispatch( saveReusableBlock( reusableBlock.id ) );
 
-	dispatch( replaceBlocks(
+	dataDispatch( 'core/block-editor' ).replaceBlocks(
 		action.clientIds,
 		createBlock( 'core/block', {
 			ref: reusableBlock.id,
-			layout: parsedBlock.attributes.layout,
 		} )
-	) );
-
-	// Re-add the original block to the store, since replaceBlock() will have removed it
-	dispatch( receiveBlocks( [ parsedBlock ] ) );
+	);
 };

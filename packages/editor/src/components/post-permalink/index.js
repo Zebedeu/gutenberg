@@ -2,6 +2,7 @@
  * External dependencies
  */
 import classnames from 'classnames';
+import { get } from 'lodash';
 
 /**
  * WordPress dependencies
@@ -11,13 +12,13 @@ import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { compose } from '@wordpress/compose';
 import { ClipboardButton, Button, ExternalLink } from '@wordpress/components';
-import { safeDecodeURI } from '@wordpress/url';
+import { safeDecodeURI, safeDecodeURIComponent } from '@wordpress/url';
+import { link as linkIcon } from '@wordpress/icons';
 
 /**
- * Internal Dependencies
+ * Internal dependencies
  */
 import PostPermalinkEditor from './editor.js';
-import { getWPAdminURL } from '../../utils/url';
 
 class PostPermalink extends Component {
 	constructor() {
@@ -53,70 +54,88 @@ class PostPermalink extends Component {
 	}
 
 	componentWillUnmount() {
-		window.removeEventListener( 'visibilitychange', this.addVisibilityCheck );
+		window.removeEventListener(
+			'visibilitychange',
+			this.addVisibilityCheck
+		);
 	}
 
 	render() {
-		const { isNew, postLink, isEditable, samplePermalink, isPublished } = this.props;
-		const { isCopied, isEditingPermalink } = this.state;
-		const ariaLabel = isCopied ? __( 'Permalink copied' ) : __( 'Copy the permalink' );
+		const {
+			isEditable,
+			isNew,
+			isPublished,
+			isViewable,
+			permalinkParts,
+			postLink,
+			postSlug,
+		} = this.props;
 
-		if ( isNew || ! postLink ) {
+		if ( isNew || ! isViewable || ! permalinkParts || ! postLink ) {
 			return null;
 		}
+
+		const { isCopied, isEditingPermalink } = this.state;
+		const ariaLabel = isCopied
+			? __( 'Permalink copied' )
+			: __( 'Copy the permalink' );
+
+		const { prefix, suffix } = permalinkParts;
+		const samplePermalink = isEditable
+			? prefix + postSlug + suffix
+			: prefix;
 
 		return (
 			<div className="editor-post-permalink">
 				<ClipboardButton
-					className={ classnames( 'editor-post-permalink__copy', { 'is-copied': isCopied } ) }
+					className={ classnames( 'editor-post-permalink__copy', {
+						'is-copied': isCopied,
+					} ) }
 					text={ samplePermalink }
 					label={ ariaLabel }
 					onCopy={ () => this.setState( { isCopied: true } ) }
 					aria-disabled={ isCopied }
-					icon="admin-links"
+					icon={ linkIcon }
 				/>
 
-				<span className="editor-post-permalink__label">{ __( 'Permalink:' ) }</span>
+				<span className="editor-post-permalink__label">
+					{ __( 'Permalink:' ) }
+				</span>
 
-				{ ! isEditingPermalink &&
+				{ ! isEditingPermalink && (
 					<ExternalLink
 						className="editor-post-permalink__link"
 						href={ ! isPublished ? postLink : samplePermalink }
 						target="_blank"
-						ref={ ( linkElement ) => this.linkElement = linkElement }
+						ref={ ( linkElement ) =>
+							( this.linkElement = linkElement )
+						}
 					>
 						{ safeDecodeURI( samplePermalink ) }
 						&lrm;
 					</ExternalLink>
-				}
+				) }
 
-				{ isEditingPermalink &&
+				{ isEditingPermalink && (
 					<PostPermalinkEditor
-						onSave={ () => this.setState( { isEditingPermalink: false } ) }
+						slug={ postSlug }
+						onSave={ () =>
+							this.setState( { isEditingPermalink: false } )
+						}
 					/>
-				}
+				) }
 
-				{ isEditable && ! isEditingPermalink &&
+				{ isEditable && ! isEditingPermalink && (
 					<Button
 						className="editor-post-permalink__edit"
-						isLarge
-						onClick={ () => this.setState( { isEditingPermalink: true } ) }
+						isSecondary
+						onClick={ () =>
+							this.setState( { isEditingPermalink: true } )
+						}
 					>
 						{ __( 'Edit' ) }
 					</Button>
-				}
-
-				{ ! isEditable &&
-					<Button
-						className="editor-post-permalink__change"
-						isLarge
-						href={ getWPAdminURL( 'options-permalink.php' ) }
-						onClick={ this.addVisibilityCheck }
-						target="_blank"
-					>
-						{ __( 'Change Permalinks' ) }
-					</Button>
-				}
+				) }
 			</div>
 		);
 	}
@@ -128,18 +147,26 @@ export default compose( [
 			isEditedPostNew,
 			isPermalinkEditable,
 			getCurrentPost,
-			getPermalink,
+			getPermalinkParts,
+			getEditedPostAttribute,
 			isCurrentPostPublished,
+			getEditedPostSlug,
 		} = select( 'core/editor' );
+		const { getPostType } = select( 'core' );
 
 		const { link } = getCurrentPost();
+
+		const postTypeName = getEditedPostAttribute( 'type' );
+		const postType = getPostType( postTypeName );
 
 		return {
 			isNew: isEditedPostNew(),
 			postLink: link,
+			permalinkParts: getPermalinkParts(),
+			postSlug: safeDecodeURIComponent( getEditedPostSlug() ),
 			isEditable: isPermalinkEditable(),
-			samplePermalink: getPermalink(),
 			isPublished: isCurrentPostPublished(),
+			isViewable: get( postType, [ 'viewable' ], false ),
 		};
 	} ),
 	withDispatch( ( dispatch ) => {

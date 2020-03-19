@@ -1,7 +1,7 @@
 /**
- * WordPress dependencies
+ * External dependencies
  */
-import deprecated from '@wordpress/deprecated';
+import { castArray } from 'lodash';
 
 /**
  * Returns an action object used in signalling that the user opened an editor sidebar.
@@ -29,7 +29,7 @@ export function closeGeneralSidebar() {
 }
 
 /**
- * Returns an action object used in signalling that the user opened an editor sidebar.
+ * Returns an action object used in signalling that the user opened a modal.
  *
  * @param {string} name A string that uniquely identifies the modal.
  *
@@ -43,7 +43,7 @@ export function openModal( name ) {
 }
 
 /**
- * Returns an action object signalling that the user closed the sidebar.
+ * Returns an action object signalling that the user closed a modal.
  *
  * @return {Object} Action object.
  */
@@ -108,7 +108,7 @@ export function toggleEditorPanelEnabled( panelName ) {
  * @param {string} panelName A string that identifies the panel to open or close.
  *
  * @return {Object} Action object.
-*/
+ */
 export function toggleEditorPanelOpened( panelName ) {
 	return {
 		type: 'TOGGLE_PANEL_OPENED',
@@ -117,19 +117,17 @@ export function toggleEditorPanelOpened( panelName ) {
 }
 
 /**
- * Returns an action object used to open or close a panel in the editor.
+ * Returns an action object used to remove a panel from the editor.
  *
- * @param {string} panelName A string that identifies the panel to open or close.
+ * @param {string} panelName A string that identifies the panel to remove.
  *
  * @return {Object} Action object.
-*/
-export function toggleGeneralSidebarEditorPanel( panelName ) {
-	deprecated( 'toggleGeneralSidebarEditorPanel', {
-		alternative: 'toggleEditorPanelOpened',
-		plugin: 'Gutenberg',
-		version: '4.3.0',
-	} );
-	return toggleEditorPanelOpened( panelName );
+ */
+export function removeEditorPanel( panelName ) {
+	return {
+		type: 'REMOVE_PANEL',
+		panelName,
+	};
 }
 
 /**
@@ -167,23 +165,63 @@ export function togglePinnedPluginItem( pluginName ) {
 	};
 }
 
-export function initializeMetaBoxState() {
-	deprecated( 'initializeMetaBoxState action (`core/edit-post`)', {
-		plugin: 'Gutenberg',
-		version: '4.2',
-	} );
+/**
+ * Returns an action object used in signalling that block types by the given
+ * name(s) should be hidden.
+ *
+ * @param {string[]} blockNames Names of block types to hide.
+ *
+ * @return {Object} Action object.
+ */
+export function hideBlockTypes( blockNames ) {
 	return {
-		type: 'DO_NOTHING',
+		type: 'HIDE_BLOCK_TYPES',
+		blockNames: castArray( blockNames ),
 	};
 }
 
-export function setActiveMetaBoxLocations() {
-	deprecated( 'setActiveMetaBoxLocations action (`core/edit-post`)', {
-		plugin: 'Gutenberg',
-		version: '4.2',
-	} );
+/**
+ * Returns an action object used in signaling that a style should be auto-applied when a block is created.
+ *
+ * @param {string}  blockName  Name of the block.
+ * @param {?string} blockStyle Name of the style that should be auto applied. If undefined, the "auto apply" setting of the block is removed.
+ *
+ * @return {Object} Action object.
+ */
+export function updatePreferredStyleVariations( blockName, blockStyle ) {
 	return {
-		type: 'DO_NOTHING',
+		type: 'UPDATE_PREFERRED_STYLE_VARIATIONS',
+		blockName,
+		blockStyle,
+	};
+}
+
+/**
+ * Returns an action object used in signalling that the editor should attempt
+ * to locally autosave the current post every `interval` seconds.
+ *
+ * @param {number} interval The new interval, in seconds.
+ * @return {Object} Action object.
+ */
+export function __experimentalUpdateLocalAutosaveInterval( interval ) {
+	return {
+		type: 'UPDATE_LOCAL_AUTOSAVE_INTERVAL',
+		interval,
+	};
+}
+
+/**
+ * Returns an action object used in signalling that block types by the given
+ * name(s) should be shown.
+ *
+ * @param {string[]} blockNames Names of block types to show.
+ *
+ * @return {Object} Action object.
+ */
+export function showBlockTypes( blockNames ) {
+	return {
+		type: 'SHOW_BLOCK_TYPES',
+		blockNames: castArray( blockNames ),
 	};
 }
 
@@ -225,21 +263,17 @@ export function metaBoxUpdatesSuccess() {
 }
 
 /**
- * Returns an action object used to set the saved meta boxes data.
- * This is used to check if the meta boxes have been touched when leaving the editor.
+ * Returns an action object used to toggle the width of the editing canvas.
+ * It's marked as experimental because, potentially, we'll need this
+ * in several pages including edit-site.
  *
- * @param   {Object} dataPerLocation Meta Boxes Data per location.
+ * @param {string} deviceType
  *
  * @return {Object} Action object.
  */
-export function setMetaBoxSavedData( dataPerLocation ) {
-	deprecated( 'setMetaBoxSavedData action (`core/edit-post`)', {
-		plugin: 'Gutenberg',
-		version: '4.2',
-	} );
-
+export function __experimentalSetPreviewDeviceType( deviceType ) {
 	return {
-		type: 'META_BOX_SET_SAVED_DATA',
-		dataPerLocation,
+		type: 'SET_PREVIEW_DEVICE_TYPE',
+		deviceType,
 	};
 }

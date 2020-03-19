@@ -1,29 +1,18 @@
 /**
  * Internal dependencies
  */
-import { filterURLForDisplay } from '../url';
+import { cleanForSlug } from '../url';
 
-describe( 'filterURLForDisplay', () => {
-	it( 'should remove protocol', () => {
-		let url = filterURLForDisplay( 'http://wordpress.org' );
-		expect( url ).toBe( 'wordpress.org' );
-		url = filterURLForDisplay( 'https://wordpress.org' );
-		expect( url ).toBe( 'wordpress.org' );
+describe( 'cleanForSlug()', () => {
+	it( 'Should return string prepared for use as url slug', () => {
+		expect( cleanForSlug( ' /Déjà_vu. ' ) ).toBe( 'deja-vu' );
 	} );
-	it( 'should remove www subdomain', () => {
-		const url = filterURLForDisplay( 'http://www.wordpress.org' );
-		expect( url ).toBe( 'wordpress.org' );
+
+	it( 'Should return an empty string for missing argument', () => {
+		expect( cleanForSlug() ).toBe( '' );
 	} );
-	it( 'should remove single trailing slash', () => {
-		const url = filterURLForDisplay( 'http://www.wordpress.org/' );
-		expect( url ).toBe( 'wordpress.org' );
-	} );
-	it( 'should preserve slashes where the url has multiple in the path', () => {
-		const url = filterURLForDisplay( 'http://www.wordpress.org/something/' );
-		expect( url ).toBe( 'wordpress.org/something/' );
-	} );
-	it( 'should preserve slash where the url has path after the initial slash', () => {
-		const url = filterURLForDisplay( 'http://www.wordpress.org/something' );
-		expect( url ).toBe( 'wordpress.org/something' );
+
+	it( 'Should return an empty string for falsy argument', () => {
+		expect( cleanForSlug( null ) ).toBe( '' );
 	} );
 } );

@@ -1,14 +1,12 @@
 /**
- * Internal Dependencies
+ * Internal dependencies
  */
 
 import { count } from '../';
 
 const mockData = {
 	l10n: {
-		shortcodes: [
-			'shortcode',
-		],
+		shortcodes: [ 'shortcode' ],
 	},
 };
 
@@ -85,15 +83,26 @@ describe( 'WordCounter', () => {
 			characters_including_spaces: 6,
 		},
 		{
-			message: 'Empty Tags',
+			message: 'Empty tags',
 			string: '<p></p>',
+			words: 0,
+			characters_excluding_spaces: 0,
+			characters_including_spaces: 0,
+		},
+		{
+			message: 'Empty string',
+			string: '',
 			words: 0,
 			characters_excluding_spaces: 0,
 			characters_including_spaces: 0,
 		},
 	];
 
-	const types = [ 'words', 'characters_excluding_spaces', 'characters_including_spaces' ];
+	const types = [
+		'words',
+		'characters_excluding_spaces',
+		'characters_including_spaces',
+	];
 
 	dataProvider.forEach( ( item ) => {
 		types.forEach( ( type ) => {
@@ -104,4 +113,3 @@ describe( 'WordCounter', () => {
 		} );
 	} );
 } );
-

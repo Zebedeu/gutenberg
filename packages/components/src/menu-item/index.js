@@ -12,52 +12,59 @@ import { cloneElement } from '@wordpress/element';
 /**
  * Internal dependencies
  */
-import Button from '../button';
 import Shortcut from '../shortcut';
-import IconButton from '../icon-button';
+import Button from '../button';
 
 /**
  * Renders a generic menu item for use inside the more menu.
  *
- * @return {WPElement} More menu item.
+ * @return {WPComponent} The component to be rendered.
  */
-function MenuItem( { children, className, icon, shortcut, isSelected, role = 'menuitem', ...props } ) {
-	className = classnames( 'components-menu-item__button', className, {
-		'has-icon': icon,
-	} );
+export function MenuItem( {
+	children,
+	info,
+	className,
+	icon,
+	shortcut,
+	isSelected,
+	role = 'menuitem',
+	...props
+} ) {
+	className = classnames( 'components-menu-item__button', className );
 
-	if ( icon ) {
-		if ( ! isString( icon ) ) {
-			icon = cloneElement( icon, {
-				className: 'components-menu-items__item-icon',
-				height: 20,
-				width: 20,
-			} );
-		}
-
-		return (
-			<IconButton
-				className={ className }
-				icon={ icon }
-				aria-checked={ isSelected }
-				role={ role }
-				{ ...props }
-			>
+	if ( info ) {
+		children = (
+			<span className="components-menu-item__info-wrapper">
 				{ children }
-				<Shortcut className="components-menu-item__shortcut" shortcut={ shortcut } />
-			</IconButton>
+				<span className="components-menu-item__info">{ info }</span>
+			</span>
 		);
+	}
+
+	if ( icon && ! isString( icon ) ) {
+		icon = cloneElement( icon, {
+			className: 'components-menu-items__item-icon',
+		} );
 	}
 
 	return (
 		<Button
-			className={ className }
-			aria-checked={ isSelected }
+			icon={ icon }
+			// Make sure aria-checked matches spec https://www.w3.org/TR/wai-aria-1.1/#aria-checked
+			aria-checked={
+				role === 'menuitemcheckbox' || role === 'menuitemradio'
+					? isSelected
+					: undefined
+			}
 			role={ role }
+			className={ className }
 			{ ...props }
 		>
 			{ children }
-			<Shortcut className="components-menu-item__shortcut" shortcut={ shortcut } />
+			<Shortcut
+				className="components-menu-item__shortcut"
+				shortcut={ shortcut }
+			/>
 		</Button>
 	);
 }

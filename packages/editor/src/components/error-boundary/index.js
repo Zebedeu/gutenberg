@@ -1,20 +1,11 @@
 /**
- * External dependencies
- */
-import { noop } from 'lodash';
-
-/**
  * WordPress dependencies
  */
 import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { Button, ClipboardButton } from '@wordpress/components';
-
-/**
- * Internal dependencies
- */
-import { Warning } from '../';
-import { getEditedPostContent } from '../../store/selectors';
+import { select } from '@wordpress/data';
+import { Warning } from '@wordpress/block-editor';
 
 class ErrorBoundary extends Component {
 	constructor() {
@@ -38,7 +29,13 @@ class ErrorBoundary extends Component {
 
 	getContent() {
 		try {
-			return getEditedPostContent( this.context.store.getState() );
+			// While `select` in a component is generally discouraged, it is
+			// used here because it (a) reduces the chance of data loss in the
+			// case of additional errors by performing a direct retrieval and
+			// (b) avoids the performance cost associated with unnecessary
+			// content serialization throughout the lifetime of a non-erroring
+			// application.
+			return select( 'core/editor' ).getEditedPostContent();
 		} catch ( error ) {}
 	}
 
@@ -52,13 +49,21 @@ class ErrorBoundary extends Component {
 			<Warning
 				className="editor-error-boundary"
 				actions={ [
-					<Button key="recovery" onClick={ this.reboot } isLarge>
+					<Button key="recovery" onClick={ this.reboot } isSecondary>
 						{ __( 'Attempt Recovery' ) }
 					</Button>,
-					<ClipboardButton key="copy-post" text={ this.getContent } isLarge>
+					<ClipboardButton
+						key="copy-post"
+						text={ this.getContent }
+						isSecondary
+					>
 						{ __( 'Copy Post Text' ) }
 					</ClipboardButton>,
-					<ClipboardButton key="copy-error" text={ error.stack } isLarge>
+					<ClipboardButton
+						key="copy-error"
+						text={ error.stack }
+						isSecondary
+					>
 						{ __( 'Copy Error' ) }
 					</ClipboardButton>,
 				] }
@@ -68,9 +73,5 @@ class ErrorBoundary extends Component {
 		);
 	}
 }
-
-ErrorBoundary.contextTypes = {
-	store: noop,
-};
 
 export default ErrorBoundary;

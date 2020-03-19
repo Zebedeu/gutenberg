@@ -1,18 +1,16 @@
 /**
  * External dependencies
  */
-import { mount } from 'enzyme';
 import { isEmpty } from 'lodash';
+import ReactTestRenderer from 'react-test-renderer';
 
 /**
  * Internal dependencies
  */
-import Slot from '../slot';
-import Fill from '../fill';
-import Provider from '../provider';
+import { Slot, Fill, Provider } from '../';
 
 /**
- * WordPress Dependencies
+ * WordPress dependencies
  */
 import { Component } from '@wordpress/element';
 
@@ -26,43 +24,47 @@ class Filler extends Component {
 	}
 	render() {
 		return [
-			<button key="1" type="button" onClick={ () => this.setState( { num: this.state.num + 1 } ) } />,
-			<Fill name={ this.props.name } key="2">{ this.props.text || this.state.num.toString() }</Fill>,
+			<button
+				key="1"
+				type="button"
+				onClick={ () => this.setState( { num: this.state.num + 1 } ) }
+			/>,
+			<Fill name={ this.props.name } key="2">
+				{ this.props.text || this.state.num.toString() }
+			</Fill>,
 		];
 	}
 }
 
 describe( 'Slot', () => {
 	it( 'should render empty Fills', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken" />
 				</div>
 				<Fill name="chicken" />
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div></div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'should render a string Fill', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken" />
 				</div>
-				<Fill name="chicken">
-					content
-				</Fill>
+				<Fill name="chicken">content</Fill>
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div>content</div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'should render a Fill containing an element', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken" />
@@ -71,13 +73,13 @@ describe( 'Slot', () => {
 					<span />
 				</Fill>
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div><span></span></div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'should render a Fill containing an array', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken" />
@@ -86,15 +88,15 @@ describe( 'Slot', () => {
 					{ [ <span key="1" />, <div key="2" />, 'text' ] }
 				</Fill>
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div><span></span><div></div>text</div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'calls the functions passed as the Slot’s fillProps in the Fill', () => {
 		const onClose = jest.fn();
 
-		const element = mount(
+		const testInstance = ReactTestRenderer.create(
 			<Provider>
 				<Slot name="chicken" fillProps={ { onClose } } />
 				<Fill name="chicken">
@@ -105,55 +107,51 @@ describe( 'Slot', () => {
 					} }
 				</Fill>
 			</Provider>
-		);
+		).root;
 
-		element.find( 'button' ).simulate( 'click' );
+		testInstance.findByType( 'button' ).props.onClick();
 
 		expect( onClose ).toHaveBeenCalledTimes( 1 );
 	} );
 
 	it( 'should render empty Fills without HTML wrapper when render props used', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken">
-						{ ( fills ) => ( ! isEmpty( fills ) && (
-							<blockquote>
-								{ fills }
-							</blockquote>
-						) ) }
+						{ ( fills ) =>
+							! isEmpty( fills ) && (
+								<blockquote>{ fills }</blockquote>
+							)
+						}
 					</Slot>
 				</div>
 				<Fill name="chicken" />
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div></div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'should render a string Fill with HTML wrapper when render props used', () => {
-		const element = mount(
+		const tree = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="chicken">
-						{ ( fills ) => ( fills && (
-							<blockquote>
-								{ fills }
-							</blockquote>
-						) ) }
+						{ ( fills ) =>
+							fills && <blockquote>{ fills }</blockquote>
+						}
 					</Slot>
 				</div>
-				<Fill name="chicken">
-					content
-				</Fill>
+				<Fill name="chicken">content</Fill>
 			</Provider>
-		);
+		).toJSON();
 
-		expect( element.html() ).toBe( '<div><blockquote>content</blockquote></div>' );
+		expect( tree ).toMatchSnapshot();
 	} );
 
 	it( 'should re-render Slot when not bubbling virtually', () => {
-		const element = mount(
+		const testRenderer = ReactTestRenderer.create(
 			<Provider>
 				<div>
 					<Slot name="egg" />
@@ -162,15 +160,15 @@ describe( 'Slot', () => {
 			</Provider>
 		);
 
-		expect( element.html() ).toBe( '<div>1</div>' );
+		expect( testRenderer.toJSON() ).toMatchSnapshot();
 
-		element.find( 'button' ).simulate( 'click' );
+		testRenderer.root.findByType( 'button' ).props.onClick();
 
-		expect( element.html() ).toBe( '<div>2</div>' );
+		expect( testRenderer.toJSON() ).toMatchSnapshot();
 	} );
 
 	it( 'should render in expected order', () => {
-		const element = mount(
+		const testRenderer = ReactTestRenderer.create(
 			<Provider>
 				<div key="slot">
 					<Slot name="egg" />
@@ -178,35 +176,90 @@ describe( 'Slot', () => {
 			</Provider>
 		);
 
-		element.setProps( {
-			children: [
+		testRenderer.update(
+			<Provider>
 				<div key="slot">
 					<Slot name="egg" />
-				</div>,
-				<Filler name="egg" key="first" text="first" />,
-				<Filler name="egg" key="second" text="second" />,
-			],
-		} );
+				</div>
+				<Filler name="egg" key="first" text="first" />
+				<Filler name="egg" key="second" text="second" />
+			</Provider>
+		);
 
-		element.setProps( {
-			children: [
+		testRenderer.update(
+			<Provider>
 				<div key="slot">
 					<Slot name="egg" />
-				</div>,
-				<Filler name="egg" key="second" text="second" />,
-			],
-		} );
+				</div>
+				<Filler name="egg" key="second" text="second" />
+			</Provider>
+		);
 
-		element.setProps( {
-			children: [
+		testRenderer.update(
+			<Provider>
 				<div key="slot">
 					<Slot name="egg" />
-				</div>,
-				<Filler name="egg" key="first" text="first" />,
-				<Filler name="egg" key="second" text="second" />,
-			],
-		} );
+				</div>
+				<Filler name="egg" key="first" text="first" />
+				<Filler name="egg" key="second" text="second" />
+			</Provider>
+		);
 
-		expect( element.html() ).toBe( '<div>firstsecond</div>' );
+		expect( testRenderer.toJSON() ).toMatchSnapshot();
 	} );
+
+	describe.each( [ false, true ] )(
+		'bubblesVirtually %p',
+		( bubblesVirtually ) => {
+			it( 'should subsume another slot by the same name', () => {
+				const testRenderer = ReactTestRenderer.create(
+					<Provider>
+						<div data-position="first">
+							<Slot
+								name="egg"
+								bubblesVirtually={ bubblesVirtually }
+							/>
+						</div>
+						<div data-position="second"></div>
+						<Fill name="egg">Content</Fill>
+					</Provider>
+				);
+
+				testRenderer.update(
+					<Provider>
+						<div data-position="first">
+							<Slot
+								name="egg"
+								bubblesVirtually={ bubblesVirtually }
+							/>
+						</div>
+						<div data-position="second">
+							<Slot
+								name="egg"
+								bubblesVirtually={ bubblesVirtually }
+							/>
+						</div>
+						<Fill name="egg">Content</Fill>
+					</Provider>
+				);
+
+				expect( testRenderer.toJSON() ).toMatchSnapshot();
+
+				testRenderer.update(
+					<Provider>
+						<div data-position="first"></div>
+						<div data-position="second">
+							<Slot
+								name="egg"
+								bubblesVirtually={ bubblesVirtually }
+							/>
+						</div>
+						<Fill name="egg">Content</Fill>
+					</Provider>
+				);
+
+				expect( testRenderer.toJSON() ).toMatchSnapshot();
+			} );
+		}
+	);
 } );

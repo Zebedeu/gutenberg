@@ -4,50 +4,56 @@ exports[`OptionsModal should match snapshot when the modal is active 1`] = `
 <WithInstanceId(Modal)
   className="edit-post-options-modal"
   closeLabel="Close"
-  title={
-    <span
-      className="edit-post-options-modal__title"
-    >
-      Options
-    </span>
-  }
+  title="Options"
 >
   <Section
     title="General"
   >
-    <WithSelect(WithDispatch(Option))
-      label="Enable Pre-publish Checks"
-    />
-    <WithSelect(WithDispatch(DeferredOption))
-      label="Enable Tips"
+    <WithSelect(WithDispatch(IfViewportMatches(BaseOption)))
+      label="Pre-publish checks"
     />
   </Section>
   <Section
-    title="Document Panels"
+    title="Document panels"
   >
+    <EnablePluginDocumentSettingPanelOptionSlot />
     <WithSelect(PostTaxonomies)
       taxonomyWrapper={[Function]}
     />
-    <WithSelect(WithDispatch(Option))
-      label="Featured Image"
-      panelName="featured-image"
-    />
+    <PostFeaturedImageCheck>
+      <WithSelect(IfCondition(WithDispatch(BaseOption)))
+        label="Featured image"
+        panelName="featured-image"
+      />
+    </PostFeaturedImageCheck>
     <PostExcerptCheck>
-      <WithSelect(WithDispatch(Option))
+      <WithSelect(IfCondition(WithDispatch(BaseOption)))
         label="Excerpt"
         panelName="post-excerpt"
       />
     </PostExcerptCheck>
-    <WithSelect(WithDispatch(Option))
-      label="Discussion"
-      panelName="discussion-panel"
-    />
+    <WithSelect(PostTypeSupportCheck)
+      supportKeys={
+        Array [
+          "comments",
+          "trackbacks",
+        ]
+      }
+    >
+      <WithSelect(IfCondition(WithDispatch(BaseOption)))
+        label="Discussion"
+        panelName="discussion-panel"
+      />
+    </WithSelect(PostTypeSupportCheck)>
     <WithSelect(PageAttributesCheck)>
-      <WithSelect(WithDispatch(Option))
-        label="Page Attributes"
+      <WithSelect(IfCondition(WithDispatch(BaseOption)))
+        label="Page attributes"
         panelName="page-attributes"
       />
     </WithSelect(PageAttributesCheck)>
   </Section>
+  <WithSelect(MetaBoxesSection)
+    title="Advanced panels"
+  />
 </WithInstanceId(Modal)>
 `;
